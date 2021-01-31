@@ -1,5 +1,7 @@
 package resource
 
+import "strings"
+
 type (
 	// A simple wrapper struct for related resources
 	composeRecordShaper struct{}
@@ -51,6 +53,9 @@ func (crt *composeRecordShaper) toResource(def *ComposeRecordTemplate, dt *Resou
 				Values: crt.mapValues(mr, def.FieldMap),
 			}
 
+			rRaw.Ts = crt.getTimestamps(rRaw.Values)
+			rRaw.Us = crt.getUserstamps(rRaw.Values)
+
 			// Process it
 			err = f(rRaw)
 			if err != nil {
@@ -82,6 +87,51 @@ func (crt *composeRecordShaper) mapValues(ov map[string]string, fm MappingTplSet
 	}
 
 	return nv
+}
+
+func (crt *composeRecordShaper) getTimestamps(vv map[string]string) *Timestamps {
+	ts := &Timestamps{}
+	// Provided values are already mapped
+	for k, v := range vv {
+		switch strings.ToLower(k) {
+		case "createdat",
+			"created_at":
+			ts.CreatedAt = MakeTimestamp(v)
+
+		case "updatedat",
+			"updated_at":
+			ts.UpdatedAt = MakeTimestamp(v)
+
+		case "deletedat",
+			"deleted_at":
+			ts.DeletedAt = MakeTimestamp(v)
+		}
+	}
+
+	return ts
+}
+
+func (crt *composeRecordShaper) getUserstamps(vv map[string]string) *Userstamps {
+	us := &Userstamps{}
+	// Provided values are already mapped
+	for k, v := range vv {
+		switch strings.ToLower(k) {
+		case "createdby",
+			"creatorid",
+			"creator":
+			us.CreatedBy = MakeUserstampFromRef(v)
+		case "updatedby":
+			us.UpdatedBy = MakeUserstampFromRef(v)
+		case "deletedby":
+			us.DeletedBy = MakeUserstampFromRef(v)
+		case "ownedby",
+			"ownerid",
+			"owner":
+			us.OwnedBy = MakeUserstampFromRef(v)
+		}
+	}
+
+	return us
 }
 
 func (crt *composeRecordShaper) getKey(vv map[string]string, kk []string) (rtr string) {

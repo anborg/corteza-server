@@ -87,31 +87,31 @@ func (se *storeEncoder) Prepare(ctx context.Context, ee ...*envoy.ResourceState)
 		switch res := e.Res.(type) {
 		// Compose resources
 		case *resource.ComposeNamespace:
-			err = f(NewComposeNamespaceState(res, se.cfg), e)
+			err = f(newComposeNamespaceFromResource(res, se.cfg), e)
 		case *resource.ComposeModule:
-			err = f(NewComposeModuleState(res, se.cfg), e)
+			err = f(NewComposeModuleFromResource(res, se.cfg), e)
 		case *resource.ComposeRecord:
-			err = f(NewComposeRecordState(res, se.cfg), e)
+			err = f(NewComposeRecordFromResource(res, se.cfg), e)
 		case *resource.ComposeChart:
-			err = f(NewComposeChartState(res, se.cfg), e)
+			err = f(newComposeChartFromResource(res, se.cfg), e)
 		case *resource.ComposePage:
-			err = f(NewComposePageState(res, se.cfg), e)
+			err = f(newComposePageFromResource(res, se.cfg), e)
 
 		// System resources
 		case *resource.User:
-			err = f(NewUserState(res, se.cfg), e)
+			err = f(NewUserFromResource(res, se.cfg), e)
 		case *resource.Role:
-			err = f(NewRole(res, se.cfg), e)
+			err = f(NewRoleFromResource(res, se.cfg), e)
 		case *resource.Application:
-			err = f(NewApplicationState(res, se.cfg), e)
-		case *resource.Settings:
-			err = f(NewSettingsState(res, se.cfg), e)
+			err = f(NewApplicationFromResource(res, se.cfg), e)
+		case *resource.Setting:
+			err = f(NewSettingFromResource(res, se.cfg), e)
 		case *resource.RbacRule:
-			err = f(NewRbacRuleState(res, se.cfg), e)
+			err = f(newRbacRuleFromResource(res, se.cfg), e)
 
 			// Messaging resources
 		case *resource.MessagingChannel:
-			err = f(NewMessagingChannelState(res, se.cfg), e)
+			err = f(newMessagingChannelFromResource(res, se.cfg), e)
 
 		default:
 			err = ErrUnknownResource

@@ -12,20 +12,30 @@ func decodeTimestamps(n *yaml.Node) (*resource.Timestamps, error) {
 		st = &resource.Timestamps{}
 	)
 
+	// Little helper to make timestamps
+	f := func(v *yaml.Node) (*resource.Timestamp, error) {
+		aux := ""
+		err := decodeScalar(v, "decode "+v.Value, &aux)
+		if err != nil {
+			return nil, err
+		}
+		return resource.MakeTimestamp(aux), nil
+	}
+
 	return st, eachMap(n, func(k, v *yaml.Node) (err error) {
 		switch strings.ToLower(k.Value) {
 		case "createdat":
-			return decodeScalar(v, "created at", &st.CreatedAt)
+			st.CreatedAt, err = f(v)
 		case "updatedat":
-			return decodeScalar(v, "updated at", &st.UpdatedAt)
+			st.UpdatedAt, err = f(v)
 		case "deletedat":
-			return decodeScalar(v, "deleted at", &st.DeletedAt)
+			st.DeletedAt, err = f(v)
 		case "suspendedat":
-			return decodeScalar(v, "suspended at", &st.SuspendedAt)
+			st.SuspendedAt, err = f(v)
 		case "archivedat":
-			return decodeScalar(v, "archived at", &st.ArchivedAt)
+			st.ArchivedAt, err = f(v)
 		}
-		return nil
+		return err
 	})
 }
 
@@ -34,18 +44,31 @@ func decodeUserstamps(n *yaml.Node) (*resource.Userstamps, error) {
 		us = &resource.Userstamps{}
 	)
 
+	// Little helper to make userstamps
+	f := func(v *yaml.Node) (*resource.Userstamp, error) {
+		aux := ""
+		err := decodeScalar(v, "decode "+v.Value, &aux)
+		if err != nil {
+			return nil, err
+		}
+		return resource.MakeUserstampFromRef(aux), nil
+	}
+
 	return us, eachMap(n, func(k, v *yaml.Node) (err error) {
 		switch strings.ToLower(k.Value) {
 		case "createdby",
-			"creatorid":
-			return decodeScalar(v, "created by", &us.CreatedBy)
+			"creatorid",
+			"creator":
+			us.CreatedBy, err = f(v)
 		case "updatedby":
-			return decodeScalar(v, "updated by", &us.UpdatedBy)
+			us.UpdatedBy, err = f(v)
 		case "deletedby":
-			return decodeScalar(v, "deleted by", &us.DeletedBy)
-		case "ownedby":
-			return decodeScalar(v, "owned by", &us.OwnedBy)
+			us.DeletedBy, err = f(v)
+		case "ownedby",
+			"ownerid",
+			"owner":
+			us.OwnedBy, err = f(v)
 		}
-		return nil
+		return err
 	})
 }
