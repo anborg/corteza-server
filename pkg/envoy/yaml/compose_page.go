@@ -33,8 +33,10 @@ type (
 	composePageBlock struct {
 		res *types.PageBlock
 
-		relMod   *types.Module
-		relChart *types.Chart
+		relMod   []*types.Module
+		refMod   []string
+		relChart []*types.Chart
+		refChart []string
 
 		cfg *EncoderConfig
 	}

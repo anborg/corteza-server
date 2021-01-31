@@ -1,6 +1,8 @@
 package yaml
 
 import (
+	"strconv"
+
 	"github.com/cortezaproject/corteza-server/compose/types"
 	"github.com/cortezaproject/corteza-server/pkg/envoy/resource"
 )
@@ -43,4 +45,8 @@ func (nn composeChartSet) ConfigureEncoder(cfg *EncoderConfig) {
 	for _, n := range nn {
 		n.encoderConfig = cfg
 	}
+}
+
+func relChartToRef(chr *types.Chart) string {
+	return resource.FirstOkString(chr.Handle, chr.Name, strconv.FormatUint(chr.ID, 10))
 }

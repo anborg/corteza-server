@@ -481,6 +481,7 @@ func TestStoreYaml_base(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			req := require.New(t)
 
+			truncateStore(ctx, s, t)
 			err, df := c.pre(ctx, s)
 			if err != nil {
 				t.Fatal(err.Error())

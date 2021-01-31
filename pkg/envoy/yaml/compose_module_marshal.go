@@ -42,7 +42,10 @@ func (n *composeModule) Prepare(ctx context.Context, state *envoy.ResourceState)
 		}
 
 		if f.Kind == "Record" {
-			refMod := f.Options.String("moduleID")
+			refMod := f.Options.String("module")
+			if refMod == "" {
+				refMod = f.Options.String("moduleID")
+			}
 			cmf.relMod = resource.FindComposeModule(state.ParentResources, resource.MakeIdentifiers(refMod))
 			if cmf.relMod == nil {
 				return resource.ComposeModuleErrUnresolved(resource.MakeIdentifiers(refMod))

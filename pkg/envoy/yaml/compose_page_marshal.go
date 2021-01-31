@@ -56,21 +56,28 @@ func (n *composePage) Prepare(ctx context.Context, state *envoy.ResourceState) (
 		}
 
 		// Check for refs
-		if ref, has := pg.BlockRefs[i]; has {
-			switch ref.ResourceType {
-			case resource.COMPOSE_MODULE_RESOURCE_TYPE:
-				cpb.relMod = resource.FindComposeModule(state.ParentResources, ref.Identifiers)
-				if cpb.relMod == nil {
-					return resource.ComposeModuleErrUnresolved(ref.Identifiers)
-				}
-			case resource.COMPOSE_CHART_RESOURCE_TYPE:
-				cpb.relChart = resource.FindComposeChart(state.ParentResources, ref.Identifiers)
-				if cpb.relChart == nil {
-					return resource.ComposeChartErrUnresolved(ref.Identifiers)
-				}
+		if refs, has := pg.BlockRefs[i]; has {
+			for _, ref := range refs {
+				switch ref.ResourceType {
+				case resource.COMPOSE_MODULE_RESOURCE_TYPE:
+					relMod := resource.FindComposeModule(state.ParentResources, ref.Identifiers)
+					cpb.relMod = append(cpb.relMod, relMod)
+					if cpb.relMod == nil {
+						return resource.ComposeModuleErrUnresolved(ref.Identifiers)
+					}
+					cpb.refMod = append(cpb.refMod, relModToRef(relMod))
 
-			default:
-				return ErrUnknownResource
+				case resource.COMPOSE_CHART_RESOURCE_TYPE:
+					relChart := resource.FindComposeChart(state.ParentResources, ref.Identifiers)
+					cpb.relChart = append(cpb.relChart, relChart)
+					if cpb.relChart == nil {
+						return resource.ComposeChartErrUnresolved(ref.Identifiers)
+					}
+					cpb.refChart = append(cpb.refChart, relChartToRef(relChart))
+
+				default:
+					return ErrUnknownResource
+				}
 			}
 		}
 
@@ -164,6 +171,44 @@ func (p *composePage) MarshalYAML() (interface{}, error) {
 func (c *composePageBlock) MarshalYAML() (interface{}, error) {
 	if c.res.Kind == "RecordList" {
 		c.cleanupModuleFields(c.res.Options)
+	}
+
+	opt := c.res.Options
+	switch c.res.Kind {
+	case "RecordList":
+		opt["moduleID"] = c.refMod[0]
+		delete(opt, "module")
+		break
+
+	case "RecordOrganizer":
+		opt["moduleID"] = c.refMod[0]
+		delete(opt, "module")
+		break
+
+	case "Chart":
+		opt["chartID"] = c.refChart[0]
+		delete(opt, "chart")
+		break
+
+	case "Calendar":
+		ff, _ := opt["feeds"].([]interface{})
+		for i, f := range ff {
+			feed, _ := f.(map[string]interface{})
+			fOpts, _ := (feed["options"]).(map[string]interface{})
+			fOpts["module"] = c.refMod[i]
+			delete(fOpts, "moduleID")
+		}
+		break
+
+	case "Metric":
+		mm, _ := opt["metrics"].([]interface{})
+		for i, m := range mm {
+			mops, _ := m.(map[string]interface{})
+			mops["module"] = c.refMod[i]
+			delete(mops, "moduleID")
+		}
+		break
+
 	}
 
 	return makeMap(

@@ -171,10 +171,32 @@ func (n *composePage) Encode(ctx context.Context, s store.Storer, state *envoy.R
 		return mod.ID
 	}
 
+	getChartID := func(id string) uint64 {
+		chr := n.relCharts[id]
+		if chr == nil || chr.ID <= 0 {
+			chr = resource.FindComposeChart(state.ParentResources, resource.MakeIdentifiers(id))
+			if chr == nil || chr.ID <= 0 {
+				return 0
+			}
+		}
+		return chr.ID
+	}
+
+	// Quick utility to extract references from options
+	ss := func(m map[string]interface{}, kk ...string) string {
+		for _, k := range kk {
+			if vr, has := m[k]; has {
+				v, _ := vr.(string)
+				return v
+			}
+		}
+		return ""
+	}
+
 	for _, b := range res.Blocks {
 		switch b.Kind {
 		case "RecordList":
-			id, _ := b.Options["module"].(string)
+			id := ss(b.Options, "module", "moduleID")
 			if id == "" {
 				continue
 			}
@@ -186,7 +208,7 @@ func (n *composePage) Encode(ctx context.Context, s store.Storer, state *envoy.R
 			delete(b.Options, "module")
 
 		case "RecordOrganizer":
-			id, _ := b.Options["module"].(string)
+			id := ss(b.Options, "module", "moduleID")
 			if id == "" {
 				continue
 			}
@@ -202,7 +224,7 @@ func (n *composePage) Encode(ctx context.Context, s store.Storer, state *envoy.R
 			for _, f := range ff {
 				feed, _ := f.(map[string]interface{})
 				fOpts, _ := (feed["options"]).(map[string]interface{})
-				id, _ := fOpts["module"].(string)
+				id := ss(fOpts, "module", "moduleID")
 				if id == "" {
 					continue
 				}
@@ -215,26 +237,22 @@ func (n *composePage) Encode(ctx context.Context, s store.Storer, state *envoy.R
 			}
 
 		case "Chart":
-			id, _ := b.Options["chart"].(string)
+			id := ss(b.Options, "chart", "chartID")
 			if id == "" {
 				continue
 			}
-			chr := n.relCharts[id]
-			if chr == nil || chr.ID <= 0 {
-				ii := resource.MakeIdentifiers(id)
-				chr = resource.FindComposeChart(state.ParentResources, ii)
-				if chr == nil || chr.ID <= 0 {
-					return resource.ComposeChartErrUnresolved(ii)
-				}
+			chrID := getChartID(id)
+			if chrID == 0 {
+				return resource.ComposeChartErrUnresolved(resource.MakeIdentifiers(id))
 			}
-			b.Options["chartID"] = strconv.FormatUint(chr.ID, 10)
+			b.Options["chartID"] = strconv.FormatUint(chrID, 10)
 			delete(b.Options, "chart")
 
 		case "Metric":
 			mm, _ := b.Options["metrics"].([]interface{})
 			for _, m := range mm {
 				mops, _ := m.(map[string]interface{})
-				id, _ := mops["module"].(string)
+				id := ss(mops, "module", "moduleID")
 				if id == "" {
 					continue
 				}

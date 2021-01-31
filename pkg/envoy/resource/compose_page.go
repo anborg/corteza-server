@@ -20,7 +20,7 @@ type (
 		ModRefs   RefSet
 		RefCharts RefSet
 
-		BlockRefs map[int]*Ref
+		BlockRefs map[int]RefSet
 	}
 )
 
@@ -29,7 +29,7 @@ func NewComposePage(pg *types.Page, nsRef, modRef, parentRef string) *ComposePag
 		base:      &base{},
 		ModRefs:   make(RefSet, 0, 10),
 		RefCharts: make(RefSet, 0, 10),
-		BlockRefs: make(map[int]*Ref),
+		BlockRefs: make(map[int]RefSet),
 	}
 	r.SetResourceType(COMPOSE_PAGE_RESOURCE_TYPE)
 	r.Res = pg
@@ -56,13 +56,21 @@ func NewComposePage(pg *types.Page, nsRef, modRef, parentRef string) *ComposePag
 		return ""
 	}
 
+	add := func(rr RefSet, r *Ref) RefSet {
+		if rr == nil {
+			rr = make(RefSet, 0, 2)
+		}
+
+		return append(rr, r)
+	}
+
 	for i, b := range pg.Blocks {
 		switch b.Kind {
 		case "RecordList":
 			id := ss(b.Options, "module", "moduleID")
 			if id != "" {
 				ref := r.AddRef(COMPOSE_MODULE_RESOURCE_TYPE, id).Constraint(r.RefNs)
-				r.BlockRefs[i] = ref
+				r.BlockRefs[i] = add(r.BlockRefs[i], ref)
 				r.ModRefs = append(r.ModRefs, ref)
 			}
 
@@ -70,7 +78,7 @@ func NewComposePage(pg *types.Page, nsRef, modRef, parentRef string) *ComposePag
 			id := ss(b.Options, "module", "moduleID")
 			if id != "" {
 				ref := r.AddRef(COMPOSE_MODULE_RESOURCE_TYPE, id).Constraint(r.RefNs)
-				r.BlockRefs[i] = ref
+				r.BlockRefs[i] = add(r.BlockRefs[i], ref)
 				r.ModRefs = append(r.ModRefs, ref)
 			}
 
@@ -78,7 +86,7 @@ func NewComposePage(pg *types.Page, nsRef, modRef, parentRef string) *ComposePag
 			id := ss(b.Options, "chart", "chartID")
 			if id != "" {
 				ref := r.AddRef(COMPOSE_CHART_RESOURCE_TYPE, id).Constraint(r.RefNs)
-				r.BlockRefs[i] = ref
+				r.BlockRefs[i] = add(r.BlockRefs[i], ref)
 				r.RefCharts = append(r.RefCharts, ref)
 			}
 
@@ -90,7 +98,7 @@ func NewComposePage(pg *types.Page, nsRef, modRef, parentRef string) *ComposePag
 				id := ss(fOpts, "module", "moduleID")
 				if id != "" {
 					ref := r.AddRef(COMPOSE_MODULE_RESOURCE_TYPE, id).Constraint(r.RefNs)
-					r.BlockRefs[i] = ref
+					r.BlockRefs[i] = add(r.BlockRefs[i], ref)
 					r.ModRefs = append(r.ModRefs, ref)
 				}
 			}
@@ -102,7 +110,7 @@ func NewComposePage(pg *types.Page, nsRef, modRef, parentRef string) *ComposePag
 				id := ss(mops, "module", "moduleID")
 				if id != "" {
 					ref := r.AddRef(COMPOSE_MODULE_RESOURCE_TYPE, id).Constraint(r.RefNs)
-					r.BlockRefs[i] = ref
+					r.BlockRefs[i] = add(r.BlockRefs[i], ref)
 					r.ModRefs = append(r.ModRefs, ref)
 				}
 			}
