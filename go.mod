@@ -12,7 +12,7 @@ require (
 	github.com/Masterminds/semver v1.5.0 // indirect
 	github.com/Masterminds/sprig v2.22.0+incompatible
 	github.com/Masterminds/squirrel v1.1.1-0.20191017225151-12f2162c8d8d
-	github.com/PaesslerAG/gval v1.0.1 // indirect
+	github.com/PaesslerAG/gval v1.0.1
 	github.com/PaesslerAG/jsonpath v0.1.1 // indirect
 	github.com/SentimensRG/ctx v0.0.0-20180729130232-0bfd988c655d
 	github.com/codegangsta/envy v0.0.0-20141216192214-4b78388c8ce4 // indirect
@@ -80,5 +80,5 @@ require (
 	gopkg.in/square/go-jose.v2 v2.3.1 // indirect
 	gopkg.in/urfave/cli.v1 v1.20.0 // indirect
 	gopkg.in/yaml.v2 v2.3.0
-	gopkg.in/yaml.v3 v3.0.0-20200601152816-913338de1bd2
+	gopkg.in/yaml.v3 v3.0.0-20200615113413-eeeca48fe776
 )
