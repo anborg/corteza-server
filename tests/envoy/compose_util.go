@@ -92,6 +92,89 @@ func sTestComposeModule(ctx context.Context, t *testing.T, s store.Storer, nsID 
 	return mod
 }
 
+func sTestComposeModuleFull(ctx context.Context, s store.Storer, t *testing.T, nsID uint64, pfx string) *types.Module {
+	modID := su.NextID()
+	mod := &types.Module{
+		ID:          modID,
+		NamespaceID: nsID,
+		Handle:      pfx + "_module",
+		Fields: types.ModuleFieldSet{
+			{
+				ID:       su.NextID(),
+				ModuleID: modID,
+				Kind:     "Bool",
+				Name:     "BoolTrue",
+			},
+			{
+				ID:       su.NextID(),
+				ModuleID: modID,
+				Kind:     "Bool",
+				Name:     "BoolFalse",
+			},
+			{
+				ID:       su.NextID(),
+				ModuleID: modID,
+				Kind:     "DateTime",
+				Name:     "DateTime",
+			},
+			{
+				ID:       su.NextID(),
+				ModuleID: modID,
+				Kind:     "Email",
+				Name:     "Email",
+			},
+			{
+				ID:       su.NextID(),
+				ModuleID: modID,
+				Kind:     "Select",
+				Name:     "Select",
+				Options: types.ModuleFieldOptions{
+					"options": []string{
+						"v1",
+						"v2",
+					},
+				},
+			},
+			{
+				ID:       su.NextID(),
+				ModuleID: modID,
+				Kind:     "Number",
+				Name:     "Number",
+				Options: types.ModuleFieldOptions{
+					"precision": 2,
+				},
+			},
+			{
+				ID:       su.NextID(),
+				ModuleID: modID,
+				Kind:     "String",
+				Name:     "String",
+			},
+			{
+				ID:       su.NextID(),
+				ModuleID: modID,
+				Kind:     "Url",
+				Name:     "Url",
+			},
+			{
+				ID:       su.NextID(),
+				ModuleID: modID,
+				Kind:     "User",
+				Name:     "User",
+			},
+		},
+	}
+	err := store.CreateComposeModule(ctx, s, mod)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = store.CreateComposeModuleField(ctx, s, mod.Fields...)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return mod
+}
+
 func sTestComposePage(ctx context.Context, t *testing.T, s store.Storer, nsID uint64, pfx string) *types.Page {
 	ns := &types.Page{
 		ID:          su.NextID(),

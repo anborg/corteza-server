@@ -3,6 +3,7 @@ package yaml
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strconv"
 
 	"github.com/cortezaproject/corteza-server/compose/types"
@@ -57,7 +58,6 @@ func (n *composeRecordEncoder) Prepare(ctx context.Context, state *envoy.Resourc
 func (n *composeRecordEncoder) Encode(ctx context.Context, doc *Document, state *envoy.ResourceState) (err error) {
 	return n.res.Walker(func(r *resource.ComposeRecordRaw) error {
 		cr := &composeRecord{
-			values:       r.Values,
 			us:           r.Us,
 			config:       r.Config,
 			refModule:    n.refModule,
@@ -73,6 +73,23 @@ func (n *composeRecordEncoder) Encode(ctx context.Context, doc *Document, state 
 			return err
 		}
 
+		vv := r.Values
+		for k, v := range vv {
+			f := n.res.RelMod.Fields.FindByName(k)
+			if f == nil {
+				return fmt.Errorf("field %s not found", k)
+			}
+
+			// Resolve user references
+			if f.Kind == "User" {
+				r.Values[k], err = n.res.UserFlakes.GetByKey(v).Stringify()
+				if err != nil {
+					return err
+				}
+			}
+		}
+
+		cr.values = vv
 		doc.AddComposeRecord(cr)
 		return nil
 	})
