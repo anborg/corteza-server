@@ -268,10 +268,15 @@ func TestStamps(t *testing.T) {
 		a, err := la(ctx, s, "app1")
 		req.NoError(err)
 		req.NotNil(a)
+		u, err := lu(ctx, s, "test")
+		req.NoError(err)
+		req.NotNil(u)
 
 		req.Equal(createdAtTs, ft(a.CreatedAt))
 		req.Equal(updatedAtTs, ft(*a.UpdatedAt))
 		req.Equal(deletedAtTs, ft(*a.DeletedAt))
+
+		req.Equal(u.ID, a.OwnerID)
 	})
 
 	t.Run("roles", func(t *testing.T) {

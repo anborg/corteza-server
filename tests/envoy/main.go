@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"testing"
 
 	"github.com/cortezaproject/corteza-server/compose/types"
 	"github.com/cortezaproject/corteza-server/pkg/envoy"
@@ -35,6 +36,20 @@ type (
 		check func(req *require.Assertions)
 	}
 )
+
+func initStoreT(ctx context.Context, t *testing.T) store.Storer {
+	s, err := sqlite3.ConnectInMemoryWithDebug(ctx)
+	if err != nil {
+		t.Fatalf("failed to init sqlite in-memory db: %v", err)
+	}
+
+	err = store.Upgrade(ctx, zap.NewNop(), s)
+	if err != nil {
+		t.Fatalf("failed to init sqlite in-memory db: %v", err)
+	}
+
+	return s
+}
 
 func initStore(ctx context.Context) (store.Storer, error) {
 	s, err := sqlite3.ConnectInMemoryWithDebug(ctx)
