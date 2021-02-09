@@ -103,7 +103,7 @@ func TestAuth_External(t *testing.T) {
 	)
 
 	svc := makeMockAuthService()
-	svc.settings.Auth.External.Enabled = true
+	svc.settings.Auth.Federated.Enabled = true
 	req.NoError(svc.store.TruncateUsers(ctx))
 	req.NoError(svc.store.TruncateCredentials(ctx))
 	req.NoError(store.CreateUser(ctx, svc.store, validUser, suspendedUser))

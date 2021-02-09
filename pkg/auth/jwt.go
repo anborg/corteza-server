@@ -2,14 +2,13 @@ package auth
 
 import (
 	"github.com/cortezaproject/corteza-server/pkg/api"
+	"github.com/dgrijalva/jwt-go"
+	"github.com/go-chi/jwtauth"
+	"github.com/pkg/errors"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
-
-	"github.com/dgrijalva/jwt-go"
-	"github.com/go-chi/jwtauth"
-	"github.com/pkg/errors"
 )
 
 type (
@@ -31,17 +30,17 @@ func SetupDefault(secret string, expiry int) {
 
 }
 
-func JWT(secret string, expiry int64) (jwt *token, err error) {
+func JWT(secret string, expiry int64) (tkn *token, err error) {
 	if len(secret) == 0 {
 		return nil, errors.New("JWT secret missing")
 	}
 
-	jwt = &token{
+	tkn = &token{
 		expiry:    expiry,
-		tokenAuth: jwtauth.New("HS256", []byte(secret), nil),
+		tokenAuth: jwtauth.New(jwt.SigningMethodHS512.Alg(), []byte(secret), nil),
 	}
 
-	return jwt, nil
+	return tkn, nil
 }
 
 // Verifies JWT and stores it into context
@@ -117,20 +116,25 @@ func (t *token) HttpAuthenticator() func(http.Handler) http.Handler {
 					return
 				}
 
+				// decodes string with space delimited set of uint64
+				// (user id + set of roles user is member of)
 				identity := &Identity{}
-				if userID, ok := claims["userID"].(string); ok && len(userID) >= 0 {
-					identity.id, _ = strconv.ParseUint(userID, 10, 64)
-				}
-
-				if memberOf, ok := claims["memberOf"].(string); ok && len(memberOf) >= 0 {
-					ss := strings.Split(memberOf, " ")
-					identity.memberOf = make([]uint64, len(ss))
-					for i, s := range ss {
-						identity.memberOf[i], _ = strconv.ParseUint(s, 10, 64)
+				if sub, has := claims["sub"]; has {
+					if str, is := sub.(string); is {
+						parts := strings.Split(str, " ")
+						identity.memberOf = make([]uint64, len(parts)-1)
+						for p := range parts {
+							id, _ := strconv.ParseUint(parts[p], 10, 64)
+							if p == 0 {
+								identity.id = id
+							} else {
+								identity.memberOf[p-1] = id
+							}
+						}
 					}
 				}
 
-				r = r.WithContext(SetJwtToContext(SetIdentityToContext(r.Context(), identity), jwt.Raw))
+				r = r.WithContext(SetIdentityToContext(r.Context(), identity))
 			}
 
 			next.ServeHTTP(w, r)

@@ -49,6 +49,9 @@ func (s Schema) Tables() []*Table {
 	return []*Table{
 		s.Users(),
 		s.Credentials(),
+		s.AuthClients(),
+		s.AuthSessions(),
+		s.AuthOA2Tokens(),
 		s.Roles(),
 		s.RoleMembers(),
 		s.Applications(),
@@ -114,6 +117,69 @@ func (Schema) Credentials() *Table {
 		CUDTimestamps,
 
 		AddIndex("owner_kind", IColumn("rel_owner", "kind"), IWhere("deleted_at IS NULL")),
+	)
+}
+
+func (Schema) AuthClients() *Table {
+	return TableDef(`auth_clients`,
+		ID,
+		ColumnDef("name", ColumnTypeText),
+		ColumnDef("handle", ColumnTypeVarchar, ColumnTypeLength(handleLength)),
+		ColumnDef("secret", ColumnTypeVarchar, ColumnTypeLength(64)),
+		ColumnDef("valid_grant", ColumnTypeVarchar, ColumnTypeLength(32)),
+		ColumnDef("scope", ColumnTypeVarchar, ColumnTypeLength(512)),
+		ColumnDef("redirect_uri", ColumnTypeText),
+		ColumnDef("enabled", ColumnTypeBoolean),
+		ColumnDef("trusted", ColumnTypeBoolean),
+		ColumnDef("valid_from", ColumnTypeTimestamp, Null),
+		ColumnDef("expires_at", ColumnTypeTimestamp, Null),
+
+		ColumnDef("owned_by", ColumnTypeIdentifier),
+		CUDTimestamps,
+		CUDUsers,
+
+		AddIndex("unique_handle", IExpr("LOWER(handle)"), IWhere("LENGTH(handle) > 0 AND deleted_at IS NULL")),
+	)
+}
+
+func (Schema) AuthSessions() *Table {
+	return TableDef(`auth_sessions`,
+		ColumnDef("id", ColumnTypeVarchar, ColumnTypeLength(64)),
+		ColumnDef("data", ColumnTypeBinary),
+		ColumnDef("rel_user", ColumnTypeIdentifier),
+		ColumnDef("created_at", ColumnTypeTimestamp),
+		ColumnDef("expires_at", ColumnTypeTimestamp),
+		ColumnDef("remote_addr", ColumnTypeVarchar, ColumnTypeLength(15)),
+		ColumnDef("user_agent", ColumnTypeVarchar),
+
+		PrimaryKey(IColumn("id")),
+		AddIndex("expires_at", IColumn("expires_at")),
+		AddIndex("user", IExpr("rel_user")),
+	)
+}
+
+func (Schema) AuthOA2Tokens() *Table {
+	return TableDef(`auth_oa2tokens`,
+		ID,
+
+		ColumnDef("code", ColumnTypeVarchar, ColumnTypeLength(48)),
+		ColumnDef("access", ColumnTypeVarchar, ColumnTypeLength(2048)),
+		ColumnDef("refresh", ColumnTypeVarchar, ColumnTypeLength(2048)),
+		ColumnDef("data", ColumnTypeJson),
+		ColumnDef("remote_addr", ColumnTypeVarchar, ColumnTypeLength(15)),
+		ColumnDef("user_agent", ColumnTypeVarchar),
+
+		ColumnDef("rel_client", ColumnTypeIdentifier),
+		ColumnDef("rel_user", ColumnTypeIdentifier),
+		ColumnDef("created_at", ColumnTypeTimestamp),
+		ColumnDef("expires_at", ColumnTypeTimestamp),
+
+		AddIndex("expires_at", IColumn("expires_at")),
+		AddIndex("code", IColumn("code")),
+		AddIndex("access", IColumn("access")),
+		AddIndex("refresh", IColumn("refresh")),
+		AddIndex("client", IExpr("rel_client")),
+		AddIndex("user", IExpr("rel_user")),
 	)
 }
 

@@ -3,9 +3,9 @@ package provision
 import (
 	"context"
 	"fmt"
+	"github.com/cortezaproject/corteza-server/auth/federated"
 	"github.com/cortezaproject/corteza-server/pkg/auth"
 	"github.com/cortezaproject/corteza-server/pkg/options"
-	"github.com/cortezaproject/corteza-server/system/auth/external"
 	"github.com/cortezaproject/corteza-server/system/types"
 	"go.uber.org/zap"
 	"strings"
@@ -14,7 +14,7 @@ import (
 // Provisions OIDC providers from PROVISION_OIDC_PROVIDER env variable
 //
 // Env variable should contains space delimited pairs of providers (<name> <provider> ....)
-func oidcAutoDiscovery(ctx context.Context, log *zap.Logger) (err error) {
+func oidcAutoDiscovery(ctx context.Context, log *zap.Logger, opt options.AuthOpt) (err error) {
 	var provider = strings.TrimSpace(options.EnvString("PROVISION_OIDC_PROVIDER", ""))
 
 	log.Debug("OIDC auto discovery provision",
@@ -48,7 +48,7 @@ func oidcAutoDiscovery(ctx context.Context, log *zap.Logger) (err error) {
 		//
 		// enable:   true
 		// we want provider & the entire external auth to be validated
-		eap, err = external.RegisterOidcProvider(ctx, name, purl, false, false, true)
+		eap, err = federated.RegisterOidcProvider(ctx, opt, name, purl, false, false, true)
 
 		if err != nil {
 			log.Error(
@@ -89,7 +89,7 @@ func authAddExternals(ctx context.Context, log *zap.Logger) (err error) {
 	)
 
 	for _, kind := range kinds {
-		env = "PROVISION_SETTINGS_AUTH_EXTERNAL_" + strings.ToUpper(kind)
+		env = "PROVISION_SETTINGS_AUTH_FEDERATED_" + strings.ToUpper(kind)
 
 		p = strings.TrimSpace(options.EnvString(env, ""))
 		if len(p) == 0 {
@@ -104,7 +104,7 @@ func authAddExternals(ctx context.Context, log *zap.Logger) (err error) {
 			// Spread name, issuer-url, key and secret from provision string for OIDC provider
 			name, eap.IssuerUrl, eap.Key, eap.Secret = pp[0], pp[1], pp[2], pp[3]
 
-			eap.Handle = external.OIDC_PROVIDER_PREFIX + name
+			eap.Handle = federated.OIDC_PROVIDER_PREFIX + name
 		} else {
 			pp = strings.SplitN(p, " ", 2)
 
@@ -115,7 +115,7 @@ func authAddExternals(ctx context.Context, log *zap.Logger) (err error) {
 
 		ctx = auth.SetSuperUserContext(ctx)
 
-		_ = external.AddProvider(ctx, eap, false)
+		_ = federated.AddProvider(ctx, eap, false)
 	}
 
 	return

@@ -1,4 +1,9 @@
 types:
+  AuthClient:
+    labelResourceType: authClient
+  AuthOa2token: {}
+  AuthSession:
+    noIdField: true
   User:
     labelResourceType: user
   Application:

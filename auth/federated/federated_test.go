@@ -1,4 +1,4 @@
-package external
+package federated
 
 import (
 	"net/url"

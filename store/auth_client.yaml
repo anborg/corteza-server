@@ -1,0 +1,43 @@
+import:
+  - github.com/cortezaproject/corteza-server/system/types
+
+fields:
+  - { field: ID }
+  - { field: Name,      sortable: true }
+  - { field: Handle,    sortable: true }
+  - { field: Secret }
+  - { field: ValidGrant }
+  - { field: Scope }
+  - { field: RedirectURI }
+  - { field: Enabled   }
+  - { field: ValidFrom, type: timestamp }
+  - { field: ExpiresAt, type: timestamp }
+  - { field: OwnedBy   }
+  - { field: CreatedBy }
+  - { field: UpdatedBy }
+  - { field: DeletedBy }
+  - { field: CreatedAt, sortable: true }
+  - { field: UpdatedAt, sortable: true }
+  - { field: DeletedAt, sortable: true }
+
+lookups:
+  - fields: [ ID ]
+    description: |-
+      searches for auth client by ID
+
+      It returns auth client even if deleted
+
+  - fields: [ Handle ]
+    uniqueConstraintCheck: true
+    filter: { DeletedAt: nil }
+    description: |-
+      searches for auth client by ID
+
+      It returns auth client even if deleted
+
+rdbms:
+  alias: ac
+  table: auth_clients
+  customFilterConverter: true
+  mapFields:
+    RedirectURI:  { column: redirect_uri }

@@ -7,6 +7,9 @@ package store
 //  - store/actionlog.yaml
 //  - store/applications.yaml
 //  - store/attachments.yaml
+//  - store/auth_client.yaml
+//  - store/auth_oa2tokens.yaml
+//  - store/auth_sessions.yaml
 //  - store/compose_attachments.yaml
 //  - store/compose_charts.yaml
 //  - store/compose_module_fields.yaml
@@ -47,6 +50,9 @@ type (
 		Actionlogs
 		Applications
 		Attachments
+		AuthClients
+		AuthOa2tokens
+		AuthSessions
 		ComposeAttachments
 		ComposeCharts
 		ComposeModuleFields

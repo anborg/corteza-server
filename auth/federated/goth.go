@@ -1,46 +1,24 @@
-package external
+package federated
 
 import (
-	"fmt"
-	"github.com/cortezaproject/corteza-server/system/types"
-	"strings"
-
-	"github.com/gorilla/sessions"
+	"github.com/cortezaproject/corteza-server/auth/settings"
 	"github.com/markbates/goth"
-	"github.com/markbates/goth/gothic"
 	"github.com/markbates/goth/providers/facebook"
 	"github.com/markbates/goth/providers/github"
 	"github.com/markbates/goth/providers/google"
 	"github.com/markbates/goth/providers/linkedin"
 	"github.com/markbates/goth/providers/openidConnect"
 	"go.uber.org/zap"
+	"strings"
 )
 
 // We're expecting that our users will be able to complete
 // external auth loop in 15 minutes.
 const (
-	gothMaxSessionStoreAge = 60 * 15 // In seconds.
-
 	WellKnown = "/.well-known/openid-configuration"
 )
 
-func setupGoth(secure bool, secret []byte) {
-	store := sessions.NewCookieStore(secret)
-	store.MaxAge(gothMaxSessionStoreAge)
-	store.Options.HttpOnly = true
-	store.Options.Secure = secure
-	gothic.Store = store
-
-	log().Debug("registering cookie session store")
-
-	if store.Options.Secure {
-		log().Debug("cookie session store has 'secure' flag ON, make sure this URL is accessed via HTTPS")
-
-	}
-
-}
-
-func setupGothProviders(ep types.ExternalAuthProviderSet, redirectUrl string) {
+func SetupGothProviders(redirectUrl string, ep ...settings.Provider) {
 	var (
 		err error
 	)
@@ -51,29 +29,18 @@ func setupGothProviders(ep types.ExternalAuthProviderSet, redirectUrl string) {
 		goth.ClearProviders()
 	}
 
-	var enabled = 0
-	for _, pc := range ep {
-		if pc.Enabled {
-			enabled++
-		}
-	}
-
-	log().Debug("initializing enabled external authentication providers", zap.Int("count", enabled))
+	log().Debug("initializing enabled external authentication providers", zap.Int("count", len(ep)))
 
 	for _, pc := range ep {
 		var provider goth.Provider
 
 		log := log().With(zap.String("provider", pc.Handle))
 
-		if !pc.Enabled {
-			continue
-		}
-
 		redirect := pc.RedirectUrl
 		if redirect == "" {
 			// If redirect URL is not explicitly set for this provider,
 			// generate one from template string
-			redirect = fmt.Sprintf(redirectUrl, pc.Handle)
+			redirect = strings.Replace(redirectUrl, "{provider}", pc.Handle, 1)
 		}
 
 		if strings.Index(pc.Handle, OIDC_PROVIDER_PREFIX) == 0 {
@@ -104,11 +71,7 @@ func setupGothProviders(ep types.ExternalAuthProviderSet, redirectUrl string) {
 		}
 
 		if provider != nil {
-			log.Info(
-				"external authentication provider added",
-				zap.String("key", pc.Key),
-				zap.String("redirectUrl", redirect),
-			)
+			log.Info("external authentication provider added", zap.String("key", pc.Key))
 			goth.UseProviders(provider)
 		}
 	}

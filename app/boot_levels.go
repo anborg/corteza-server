@@ -4,8 +4,8 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
-	"time"
-
+	authService "github.com/cortezaproject/corteza-server/auth"
+	"github.com/cortezaproject/corteza-server/auth/settings"
 	cmpService "github.com/cortezaproject/corteza-server/compose/service"
 	cmpEvent "github.com/cortezaproject/corteza-server/compose/service/event"
 	fdrService "github.com/cortezaproject/corteza-server/federation/service"
@@ -27,11 +27,13 @@ import (
 	"github.com/cortezaproject/corteza-server/pkg/scheduler"
 	"github.com/cortezaproject/corteza-server/pkg/sentry"
 	"github.com/cortezaproject/corteza-server/store"
-	"github.com/cortezaproject/corteza-server/system/auth/external"
 	sysService "github.com/cortezaproject/corteza-server/system/service"
 	sysEvent "github.com/cortezaproject/corteza-server/system/service/event"
+	"github.com/cortezaproject/corteza-server/system/types"
 	"go.uber.org/zap"
 	gomail "gopkg.in/mail.v2"
+	"strings"
+	"time"
 )
 
 const (
@@ -179,6 +181,49 @@ func (app *CortezaApp) InitStore(ctx context.Context) (err error) {
 		if err = store.Upgrade(ctx, log, app.Store); err != nil {
 			return err
 		}
+
+		// @todo refactor this to make more sense and put it where it belongs
+		{
+			var set types.SettingValueSet
+			set, _, err = store.SearchSettings(ctx, app.Store, types.SettingsFilter{Prefix: "auth.external"})
+			if err != nil {
+				return err
+			}
+
+			err = set.Walk(func(old *types.SettingValue) error {
+				if strings.HasSuffix(old.Name, ".redirect-url") {
+					// remove obsolete redirect-url
+					if err = store.DeleteSetting(ctx, app.Store, old); err != nil {
+						return err
+					}
+
+					return nil
+				}
+
+				var new = *old
+				new.Name = strings.Replace(new.Name, "auth.external", "auth.federated", 1)
+				new.Name = strings.Replace(new.Name, "provider.gplus.", "provider.google.", 1)
+
+				log.Info("renaming settings", zap.String("old", old.Name), zap.String("new", new.Name))
+
+				if err = store.CreateSetting(ctx, app.Store, &new); err != nil {
+					if store.ErrNotUnique != err {
+						return err
+					}
+				}
+
+				if err = store.DeleteSetting(ctx, app.Store, old); err != nil {
+					return err
+				}
+
+				return nil
+			})
+
+			if err != nil {
+				return err
+			}
+		}
+
 	}
 
 	app.lvl = bootLevelStoreInitialized
@@ -218,6 +263,7 @@ func (app *CortezaApp) InitServices(ctx context.Context) (err error) {
 	err = sysService.Initialize(ctx, app.Log, app.Store, sysService.Config{
 		ActionLog: app.Opt.ActionLog,
 		Storage:   app.Opt.ObjStore,
+		Auth:      app.Opt.Auth,
 	})
 
 	if err != nil {
@@ -274,8 +320,18 @@ func (app *CortezaApp) InitServices(ctx context.Context) (err error) {
 		}
 	}
 
-	// Initialize external authentication (from default settings)
-	external.Init()
+	if app.AuthService, err = authService.New(ctx, app.Log, app.Store, app.Opt.Auth); err != nil {
+		return
+	}
+
+	sysService.DefaultSettings.Register("auth.", func(ctx context.Context, current interface{}, set types.SettingValueSet) {
+		appSettings, is := current.(*types.AppSettings)
+		if !is {
+			return
+		}
+
+		updateAuthSettings(app.AuthService, appSettings)
+	})
 
 	app.lvl = bootLevelServicesInitialized
 	return
@@ -300,7 +356,7 @@ func (app *CortezaApp) Provision(ctx context.Context) (err error) {
 		ctx = actionlog.RequestOriginToContext(ctx, actionlog.RequestOrigin_APP_Provision)
 		ctx = auth.SetSuperUserContext(ctx)
 
-		if err = provision.Run(ctx, app.Log, app.Store, app.Opt.Provision.Path); err != nil {
+		if err = provision.Run(ctx, app.Log, app.Store, app.Opt.Provision, app.Opt.Auth); err != nil {
 			return err
 		}
 
@@ -358,12 +414,40 @@ func (app *CortezaApp) Activate(ctx context.Context) (err error) {
 		websocket.Watch(ctx)
 	}
 
-	// Initialize external authentication (from default settings)
-	//
-	// We're relying on current settings to be loaded at this point so
-	// we need to run init AFTER service activation
-	external.Init()
+	updateAuthSettings(app.AuthService, sysService.CurrentSettings)
 
 	app.lvl = bootLevelActivated
 	return nil
+}
+
+func updateAuthSettings(svc authServicer, current *types.AppSettings) {
+	var (
+		// current auth settings
+		cas       = current.Auth
+		providers []settings.Provider
+	)
+
+	for _, p := range cas.Federated.Providers {
+		if !p.Enabled {
+			continue
+		}
+
+		providers = append(providers, settings.Provider{
+			Handle:      p.Handle,
+			Label:       p.Label,
+			IssuerUrl:   p.IssuerUrl,
+			Key:         p.Key,
+			RedirectUrl: p.RedirectUrl,
+			Secret:      p.Secret,
+		})
+	}
+
+	svc.UpdateSettings(&settings.Settings{
+		LocalEnabled:              cas.Internal.Enabled,
+		SignupEnabled:             cas.Internal.Signup.Enabled,
+		EmailConfirmationRequired: cas.Internal.Signup.EmailConfirmationRequired,
+		PasswordResetEnabled:      cas.Internal.PasswordReset.Enabled,
+		FederatedEnabled:          cas.Federated.Enabled,
+		Providers:                 providers,
+	})
 }

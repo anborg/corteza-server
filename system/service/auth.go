@@ -45,6 +45,7 @@ type (
 
 const (
 	credentialsTypePassword                    = "password"
+	credentialsTypePersistentSession           = "persistent-session"
 	credentialsTypeEmailAuthToken              = "email-authentication-token"
 	credentialsTypeResetPasswordToken          = "password-reset-token"
 	credentialsTypeResetPasswordTokenExchanged = "password-reset-token-exchanged"
@@ -105,8 +106,8 @@ func (svc auth) External(ctx context.Context, profile goth.User) (u *types.User,
 		}
 	)
 
-	err = func() error {
-		if !svc.settings.Auth.External.Enabled {
+	err = func() (err error) {
+		if !svc.settings.Auth.Federated.Enabled {
 			return AuthErrExternalDisabledByConfig(aam)
 		}
 
@@ -118,8 +119,11 @@ func (svc auth) External(ctx context.Context, profile goth.User) (u *types.User,
 			return AuthErrProfileWithoutValidEmail(aam)
 		}
 
-		f := types.CredentialsFilter{Kind: profile.Provider, Credentials: profile.UserID}
-		if cc, _, err := store.SearchCredentials(ctx, svc.store, f); err == nil {
+		var (
+			cc types.CredentialsSet
+			f  = types.CredentialsFilter{Kind: profile.Provider, Credentials: profile.UserID}
+		)
+		if cc, _, err = store.SearchCredentials(ctx, svc.store, f); err == nil {
 			// Credentials found, load user
 			for _, c := range cc {
 				if !c.Valid() {
@@ -134,13 +138,13 @@ func (svc auth) External(ctx context.Context, profile goth.User) (u *types.User,
 						// Orphaned credentials (no owner)
 						// try to auto-fix this by removing credentials and recreating user
 						if err = store.DeleteCredentialsByID(ctx, svc.store, c.ID); err != nil {
-							return err
+							return
 						} else {
 							goto findByEmail
 						}
 					}
 
-					return err
+					return
 				}
 
 				aam.setUser(u)
@@ -156,6 +160,14 @@ func (svc auth) External(ctx context.Context, profile goth.User) (u *types.User,
 					return AuthErrCredentialsLinkedToInvalidUser(aam)
 				}
 
+				// Assuming we can trust that email has been verified by the provider
+				if !u.EmailConfirmed {
+					u.EmailConfirmed = true
+					if err = store.UpdateUser(ctx, svc.store, u); err != nil {
+						return
+					}
+				}
+
 				return svc.recordAction(ctx, aam, AuthActionUpdateCredentials, nil)
 			}
 
@@ -165,7 +177,7 @@ func (svc auth) External(ctx context.Context, profile goth.User) (u *types.User,
 			goto findByEmail
 		} else {
 			// A serious error occurred, bail out...
-			return err
+			return
 		}
 
 	findByEmail:
@@ -183,9 +195,10 @@ func (svc auth) External(ctx context.Context, profile goth.User) (u *types.User,
 
 			// In case we do not have this email, create a new user
 			u = &types.User{
-				Email:    profile.Email,
-				Name:     profile.Name,
-				Username: profile.NickName,
+				Email:          profile.Email,
+				Name:           profile.Name,
+				Username:       profile.NickName,
+				EmailConfirmed: true,
 			}
 
 			if !handle.IsValid(profile.NickName) {
@@ -252,16 +265,18 @@ func (svc auth) External(ctx context.Context, profile goth.User) (u *types.User,
 		aam.setCredentials(c)
 		svc.recordAction(ctx, aam, AuthActionCreateCredentials, nil)
 
-		// Owner loaded, carry on.
+		// Assuming we can trust that email has been verified by the provider
+		if !u.EmailConfirmed {
+			u.EmailConfirmed = true
+			if err = store.UpdateUser(ctx, svc.store, u); err != nil {
+				return
+			}
+		}
+
 		return nil
 	}()
 
 	return u, svc.recordAction(ctx, aam, AuthActionAuthenticate, err)
-}
-
-// FrontendRedirectURL - a proxy to frontend redirect url setting
-func (svc auth) FrontendRedirectURL() string {
-	return svc.settings.Auth.Frontend.Url.Redirect
 }
 
 // InternalSignUp protocol
@@ -383,7 +398,7 @@ func (svc auth) InternalSignUp(ctx context.Context, input *types.User, password 
 
 		u = nUser
 		if !nUser.EmailConfirmed {
-			err = svc.sendEmailAddressConfirmationToken(ctx, nUser)
+			err = svc.SendEmailAddressConfirmationToken(ctx, nUser)
 			if err != nil {
 				return err
 			}
@@ -521,7 +536,7 @@ func (svc auth) Impersonate(ctx context.Context, userID uint64) (u *types.User, 
 }
 
 // ChangePassword validates old password and changes it with new
-func (svc auth) ChangePassword(ctx context.Context, userID uint64, oldPassword, AuthActionPassword string) (err error) {
+func (svc auth) ChangePassword(ctx context.Context, userID uint64, oldPassword, newPassword string) (err error) {
 	var (
 		u  *types.User
 		cc types.CredentialsSet
@@ -541,7 +556,7 @@ func (svc auth) ChangePassword(ctx context.Context, userID uint64, oldPassword, 
 			return AuthErrPasswordNotSecure(aam)
 		}
 
-		if !svc.CheckPasswordStrength(AuthActionPassword) {
+		if !svc.CheckPasswordStrength(newPassword) {
 			return AuthErrPasswordNotSecure(aam)
 		}
 
@@ -559,7 +574,7 @@ func (svc auth) ChangePassword(ctx context.Context, userID uint64, oldPassword, 
 			return AuthErrPasswodResetFailedOldPasswordCheckFailed(aam)
 		}
 
-		if err != svc.SetPasswordCredentials(ctx, userID, AuthActionPassword) {
+		if err != svc.SetPasswordCredentials(ctx, userID, newPassword) {
 			return err
 		}
 
@@ -579,6 +594,10 @@ func (svc auth) CheckPasswordStrength(password string) bool {
 	}
 
 	return true
+}
+
+func (svc auth) EmailConfirmationRequired() bool {
+	return svc.settings.Auth.Internal.Signup.EmailConfirmationRequired
 }
 
 // SetPasswordCredentials (soft) deletes old password entry and creates a new entry with new password on every change
@@ -657,7 +676,7 @@ func (svc auth) ValidateEmailConfirmationToken(ctx context.Context, token string
 
 // ValidatePasswordResetToken validates password reset token
 func (svc auth) ValidatePasswordResetToken(ctx context.Context, token string) (user *types.User, err error) {
-	return svc.loadFromTokenAndConfirmEmail(ctx, token, credentialsTypeEmailAuthToken)
+	return svc.loadFromTokenAndConfirmEmail(ctx, token, credentialsTypeResetPasswordToken)
 }
 
 // loadFromTokenAndConfirmEmail loads token, confirms user's
@@ -689,6 +708,10 @@ func (svc auth) loadFromTokenAndConfirmEmail(ctx context.Context, token, tokenTy
 		u.EmailConfirmed = true
 		u.UpdatedAt = now()
 		if err = store.UpdateUser(ctx, svc.store, u); err != nil {
+			return err
+		}
+
+		if err = svc.LoadRoleMemberships(ctx, u); err != nil {
 			return err
 		}
 
@@ -733,7 +756,7 @@ func (svc auth) ExchangePasswordResetToken(ctx context.Context, token string) (u
 	return u, t, svc.recordAction(ctx, aam, AuthActionExchangePasswordResetToken, err)
 }
 
-func (svc auth) sendEmailAddressConfirmationToken(ctx context.Context, u *types.User) (err error) {
+func (svc auth) SendEmailAddressConfirmationToken(ctx context.Context, u *types.User) (err error) {
 	var (
 		notificationLang = "en"
 		token            string
@@ -832,13 +855,10 @@ func (svc auth) procLogin(ctx context.Context, s store.Storer, u *types.User, c 
 		return AuthErrFailedForSuspendedUser()
 	case u.DeletedAt != nil:
 		return AuthErrFailedForDeletedUser()
-	case !u.EmailConfirmed && svc.settings.Auth.Internal.Signup.EmailConfirmationRequired:
-		// Re-send email-confirmation when not confirmed and signup email confirmation required
-		if err = svc.sendEmailAddressConfirmationToken(ctx, u); err != nil {
-			return err
-		}
+	}
 
-		return AuthErrFailedUnconfirmedEmail()
+	if err = svc.LoadRoleMemberships(ctx, u); err != nil {
+		return
 	}
 
 	if c != nil {
@@ -992,4 +1012,8 @@ func (svc auth) LoadRoleMemberships(ctx context.Context, u *types.User) error {
 
 	u.SetRoles(rr.IDs())
 	return nil
+}
+
+func (svc auth) GetProviders() types.ExternalAuthProviderSet {
+	return CurrentSettings.Auth.Federated.Providers
 }
